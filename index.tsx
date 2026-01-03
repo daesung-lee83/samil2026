@@ -11,8 +11,6 @@ import {
   Trophy,
   BookOpen,
   ExternalLink,
-  Sparkles,
-  Loader2,
   X
 } from 'lucide-react';
 import { 
@@ -31,7 +29,6 @@ import {
   getYear
 } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { GoogleGenAI } from "@google/genai";
 
 // --- BIBLE READING DATA ---
 const READING_DATA: Record<string, string> = {
@@ -81,7 +78,6 @@ const getBibleUrl = (passage: string) => {
     const chapter = range ? range.split('-')[0] : '1';
     const code = BIBLE_CODES[bookName];
     if (code) {
-      // GOODTV 성경 링크 형식: idx=권번호, chapter=장번호
       return `https://goodtvbible.goodtv.co.kr/bible.asp?idx=${code}&chapter=${chapter}`;
     }
   } catch (e) {
@@ -118,7 +114,7 @@ const App: React.FC = () => {
   const currentReading = READING_DATA[currentReadingKey] || "정보 없음";
   const isDone = !!completed[currentReadingKey];
   const totalCompleted = Object.values(completed).filter(Boolean).length;
-  const progressPercent = Math.round((totalCompleted / 365) * 100);
+  const progressPercent = Math.round((totalCompleted / 313) * 100); // Sundays excluded (approx 313 reading days)
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 pb-28 md:py-10 text-gray-800">
@@ -132,14 +128,14 @@ const App: React.FC = () => {
         <div className="bg-white shadow-sm border border-blue-100 rounded-2xl px-4 py-3 flex items-center gap-4 self-start md:self-auto">
           <div className="text-right">
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">진행률</p>
-            <p className="text-xl font-black text-blue-800 leading-none">{progressPercent}%</p>
+            <p className="text-xl font-black text-blue-800 leading-none">{progressPercent > 100 ? 100 : progressPercent}%</p>
           </div>
           <div className="w-12 h-12 relative">
              <svg className="w-12 h-12 transform -rotate-90">
               <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-blue-50" />
               <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" fill="transparent" 
                 strokeDasharray={2 * Math.PI * 20}
-                strokeDashoffset={2 * Math.PI * 20 * (1 - progressPercent / 100)}
+                strokeDashoffset={2 * Math.PI * 20 * (1 - (progressPercent > 100 ? 100 : progressPercent) / 100)}
                 className="text-blue-600 transition-all duration-1000 ease-out" 
               />
             </svg>
@@ -183,31 +179,9 @@ const DailyView: React.FC<{
   selectedDate: Date, setSelectedDate: (d: Date) => void,
   reading: string, isDone: boolean, toggleComplete: (s: string) => void
 }> = ({ selectedDate, setSelectedDate, reading, isDone, toggleComplete }) => {
-  const [insight, setInsight] = useState<string | null>(null);
-  const [loadingInsight, setLoadingInsight] = useState(false);
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const isSamilSunday = reading === "주일";
   const bibleUrl = getBibleUrl(reading);
-
-  const fetchInsight = async () => {
-    if (isSamilSunday || reading === "정보 없음") return;
-    setLoadingInsight(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `성경 통독 본문 "${reading}"에 대한 핵심 요약과 묵상 가이드를 작성해줘. 1. 핵심 내용, 2. 핵심 구절, 3. 적용점 순서로 간결하게 작성해줘.`,
-      });
-      setInsight(response.text || "통찰을 불러올 수 없습니다.");
-    } catch (error) {
-      console.error(error);
-      setInsight("AI 정보를 가져오는 중 오류가 발생했습니다.");
-    } finally {
-      setLoadingInsight(false);
-    }
-  };
-
-  useEffect(() => { setInsight(null); }, [selectedDate]);
 
   return (
     <div className="space-y-4 md:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -239,48 +213,32 @@ const DailyView: React.FC<{
           {reading}
         </h2>
 
-        <div className="flex flex-col sm:flex-row gap-3 justify-center mb-6">
-          {bibleUrl && (
-            <a href={bibleUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 px-5 py-3 bg-white border-2 border-blue-600 text-blue-600 font-black rounded-xl hover:bg-blue-50 transition-all shadow-sm text-sm sm:text-base">
-              <ExternalLink size={18} /> 본문 읽기
-            </a>
-          )}
-          <button onClick={() => toggleComplete(dateStr)} className={`flex items-center justify-center gap-2 px-8 py-3 rounded-xl text-lg font-black transition-all transform active:scale-95 shadow-lg ${
-            isDone ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-blue-600 text-white hover:bg-blue-700'
-          }`}>
-            {isDone ? <CheckCircle2 size={22} /> : <Circle size={22} />}
-            <span>{isDone ? '완료 취소' : '읽기 완료 체크'}</span>
-          </button>
-        </div>
-
-        {!isSamilSunday && reading !== "정보 없음" && !insight && (
-          <button onClick={fetchInsight} disabled={loadingInsight} className="flex items-center gap-2 mx-auto text-blue-500 hover:text-blue-700 font-bold text-xs bg-blue-50/50 px-4 py-2 rounded-full transition-all">
-            {loadingInsight ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} AI 말씀 인사이트 보기
-          </button>
-        )}
-
-        {insight && (
-          <div className="mt-6 text-left bg-white/90 backdrop-blur-sm p-5 sm:p-7 rounded-2xl border border-blue-100 relative animate-in zoom-in-95 duration-300">
-            <button onClick={() => setInsight(null)} className="absolute top-4 right-4 text-gray-300 hover:text-gray-500"><X size={18} /></button>
-            <div className="flex items-center gap-2 mb-3 text-blue-600 font-black text-sm">
-              <Sparkles size={16} /> <span>오늘의 말씀 가이드</span>
-            </div>
-            <div className="text-gray-700 whitespace-pre-wrap leading-relaxed text-sm sm:text-base font-medium">
-              {insight}
-            </div>
+        {!isSamilSunday && (
+          <div className="flex flex-col sm:flex-row gap-3 justify-center mb-6">
+            {bibleUrl && (
+              <a href={bibleUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 px-5 py-3 bg-white border-2 border-blue-600 text-blue-600 font-black rounded-xl hover:bg-blue-50 transition-all shadow-sm text-sm sm:text-base">
+                <ExternalLink size={18} /> 본문 읽기
+              </a>
+            )}
+            <button onClick={() => toggleComplete(dateStr)} className={`flex items-center justify-center gap-2 px-8 py-3 rounded-xl text-lg font-black transition-all transform active:scale-95 shadow-lg ${
+              isDone ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}>
+              {isDone ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+              <span>{isDone ? '완료 취소' : '읽기 완료 체크'}</span>
+            </button>
           </div>
         )}
 
         {isSamilSunday && <p className="mt-4 text-orange-600 font-bold italic text-base">"거룩한 주일, 안식하며 예배하세요"</p>}
       </div>
 
-      {!isDone && !isSamilSunday && !insight && (
+      {!isDone && !isSamilSunday && (
         <div className="bg-blue-50/50 border border-blue-100 p-5 rounded-2xl flex items-start gap-4">
           <div className="bg-blue-600 p-2 rounded-lg text-white shrink-0"><BookOpen size={16} /></div>
           <div>
-            <h4 className="font-bold text-blue-900 mb-1 text-sm">GOODTV 본문 연결</h4>
+            <h4 className="font-bold text-blue-900 mb-1 text-sm">성경 읽기 안내</h4>
             <p className="text-blue-800/80 text-[13px] leading-snug font-medium">
-              본문 읽기를 누르면 GOODTV 성경 읽기 페이지로 바로 연결됩니다.
+              본문 읽기를 누르면 GOODTV 성경 읽기 페이지로 연결됩니다. 말씀을 읽으신 후 완료 체크를 잊지 마세요.
             </p>
           </div>
         </div>
@@ -333,7 +291,7 @@ const CalendarView: React.FC<{
                 }`}>
                   {format(day, 'd')}
                 </span>
-                {isFinished && <div className={`absolute bottom-1.5 sm:bottom-2 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-green-500'}`}></div>}
+                {isFinished && READING_DATA[key] !== "주일" && <div className={`absolute bottom-1.5 sm:bottom-2 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-green-500'}`}></div>}
                 {READING_DATA[key] === "주일" && isCurrMonth && !isSelected && <div className="absolute top-1 right-1 w-1 h-1 rounded-full bg-red-400"></div>}
               </button>
             );
@@ -361,6 +319,7 @@ const ListView: React.FC<{
                 const key = format(day, 'yyyy-MM-dd');
                 const isFinished = !!completed[key];
                 const isSunday = day.getDay() === 0;
+                const isSamilSunday = READING_DATA[key] === "주일";
                 return (
                   <div key={key} className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => setSelectedDate(day)}>
                     <div className="flex items-center gap-4">
@@ -370,9 +329,11 @@ const ListView: React.FC<{
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{format(day, 'eeee', { locale: ko })}</p>
                       </div>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); toggleComplete(key); }} className={`p-2 rounded-xl transition-colors ${isFinished ? 'text-green-600 bg-green-50' : 'text-gray-200'}`}>
-                      {isFinished ? <CheckCircle2 size={22} /> : <Circle size={22} />}
-                    </button>
+                    {!isSamilSunday && (
+                      <button onClick={(e) => { e.stopPropagation(); toggleComplete(key); }} className={`p-2 rounded-xl transition-colors ${isFinished ? 'text-green-600 bg-green-50' : 'text-gray-200'}`}>
+                        {isFinished ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+                      </button>
+                    )}
                   </div>
                 );
               })}
