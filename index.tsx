@@ -78,7 +78,8 @@ const getBibleUrl = (passage: string) => {
     const chapter = range ? range.split('-')[0] : '1';
     const code = BIBLE_CODES[bookName];
     if (code) {
-      return `https://goodtvbible.goodtv.co.kr/bible.asp?idx=${code}&chapter=${chapter}`;
+      // 새로운 GOODTV 성경 링크 형식: https://goodtvbible.goodtv.co.kr/onbibleread/0/[권번호]/[장번호]
+      return `https://goodtvbible.goodtv.co.kr/onbibleread/0/${code}/${chapter}`;
     }
   } catch (e) {
     console.error("Link generation failed", e);
@@ -114,7 +115,7 @@ const App: React.FC = () => {
   const currentReading = READING_DATA[currentReadingKey] || "정보 없음";
   const isDone = !!completed[currentReadingKey];
   const totalCompleted = Object.values(completed).filter(Boolean).length;
-  const progressPercent = Math.round((totalCompleted / 313) * 100); // Sundays excluded (approx 313 reading days)
+  const progressPercent = Math.round((totalCompleted / 313) * 100);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 pb-28 md:py-10 text-gray-800">
